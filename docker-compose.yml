@@ -1,43 +1,77 @@
 version: '2'
 services:
     wordpress:
-        build:
-            context: ./
-            dockerfile: ./Dockerfile
-        links:
-            - db:mysql
-            - mailhog
+        image: wordpress:latest 
         ports:
-            - 80:80
-        domainname: env.localhost
-        hostname: env
+        - 127.0.0.1:80:80 # you can change ip
         volumes:
-            - ./public:/var/www/html
-            - ./wp.sh:/var/www/html/wp.sh
-            - ./phpconf.ini:/usr/local/etc/php/conf.d/phpconf.ini
+        - ./config/php.conf.uploads.ini:/usr/local/etc/php/conf.d/uploads.ini
+        - ./wp-app:/var/www/html # wordpress files
+        - ./plugins/:/var/www/html/wp-content/plugins/ # custom plugin
+        - ./themes/:/var/www/html/wp-content/themes/ # custom theme
+        - ./uploads/:/var/www/html/wp-content/uploads/ # custom uploads
+       
+
         environment:
-            WORDPRESS_DB_PASSWORD: docker
+            WORDPRESS_DB_HOST: db
+            WORDPRESS_DB_NAME: wordpress
+            WORDPRESS_DB_USER: root
+            WORDPRESS_DB_PASSWORD: password
         depends_on:
-            - mailhog
-            - db
+        - db
+        - mailhog
+
+        networks:
+        - wordpress-network
+
+    db:
+        image: mysql:5.7 # https://hub.docker.com/_/mysql/ // mariadb https://hub.docker.com/_/mariadb
+        ports:
+        - 127.0.0.1:3307:3306 # you can change ip
+        restart: always
+        command: [
+            '--default_authentication_plugin=mysql_native_password',
+            '--character-set-server=utf8mb4',
+            '--collation-server=utf8mb4_unicode_ci'
+        ]
+        volumes:
+        - ./wp-data:/var/lib/mysql
+
+        environment:
+            MYSQL_DATABASE: wordpress
+            MYSQL_ROOT_PASSWORD: password
+        networks:
+        - wordpress-network
+
+    phpmyadmin:
+        depends_on:
+        - db
+        image: phpmyadmin/phpmyadmin
+        restart: always
+        ports:
+        - 8080:80
+        environment:
+            PMA_HOST: db
+            MYSQL_ROOT_PASSWORD: password
+        networks:
+        - wordpress-network
+
 
     mailhog:
         image: mailhog/mailhog
         ports:
-            - 1025:1025
-            - 8025:8025
+        - 1025:1025
+        - 8025:8025
 
     wpcli:
         image: tatemz/wp-cli
         volumes_from:
-            - wordpress
+        - wordpress
         links:
-            - db:mysql
+        - db:mysql
         command: "sh wp.sh"
 
-    db:
-        image: mysql
-        ports:
-            - 3306:3306
-        environment:
-            MYSQL_ROOT_PASSWORD: docker
+
+networks:
+    wordpress-network:
+        driver: bridge
